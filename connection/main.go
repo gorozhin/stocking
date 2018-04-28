@@ -6,9 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"time"
-	
+	"../middlewareInterface"
 )
 
 const (
@@ -55,21 +54,22 @@ func (pc *connectionResponse) formate() []byte {
 
 func (sc *Connection) HandShake() error {
 	request := make([]byte, 258)
-
 	read_len, err := sc.Conn.Read(request)
 
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
 
+		fmt.Println(err)
+		return err
+	}
+	
 	if request[0] != socks5ProtocolVersion {
+		middlewareInterface.UnsupportedSocksVersion(sc.Server.GetMiddleware(), request[0])
 		return errors.New("Unsupported SOCKS version")
 	}
 
 	auth_methods := request[2:read_len]
+	
 	err = errors.New("Unsupported auth method")
-
 	var auth_method byte = 0xff
 	for _, elt := range auth_methods {
 		switch elt {
@@ -84,13 +84,16 @@ func (sc *Connection) HandShake() error {
 			break
 		}
 	}
-
-	if err != nil {
-		//
-	}
+	
 	
 	sc.Conn.Write([]byte{socks5ProtocolVersion, auth_method})
-	
+	if err != nil {
+		middlewareInterface.UnsuccessfullHandShake(sc.Server.GetMiddleware(), sc.Conn.RemoteAddr().String(), err)
+
+		return err
+	}
+	middlewareInterface.SuccessfullHandShake(sc.Server.GetMiddleware(), sc.Conn.RemoteAddr().String(), auth_method)
+
 	if auth_method == 0x02{
 		auth_request := make([]byte, 515)
 		auth_request_read_len, err := sc.Conn.Read(auth_request)
@@ -123,8 +126,8 @@ func (sc *Connection) DispatchRequest() (err error) {
 
 	read_len, err := sc.Conn.Read(request)
 	if err != nil {
-		fmt.Println("Connection error: ", err)
-		fmt.Println(err.Error())
+		//fmt.Println("Connection error: ", err)
+		//fmt.Println(err.Error())
 		return errors.New("Connection crashed")
 	}
 
@@ -142,8 +145,8 @@ func (sc *Connection) DispatchRequest() (err error) {
 
 		sc.Conn.Write(cr.formate())
 
-		fmt.Println("Something went wrong 3")
-		fmt.Println(err.Error())
+		//fmt.Println("Something went wrong 3")
+		//fmt.Println(err.Error())
 
 		return err
 	}
@@ -170,14 +173,14 @@ func (sc *Connection) HandleRequest() {
 
 	err := sc.HandShake()
 	if err != nil {
-		fmt.Println("Something went wrong with handshake", err)
+		//fmt.Println("Something went wrong with handshake", err)
 		return
 	}
 
 	err = sc.DispatchRequest()
 	if err != nil {
-		fmt.Println("Something went wrong with dispatch", err)
-		fmt.Println(err.Error())
+		//fmt.Println("Something went wrong with dispatch", err)
+		//fmt.Println(err.Error())
 		return 
 	}
 
@@ -191,10 +194,6 @@ func getAddressAndPort(request []byte, read_len int) (destAddr, destPort string,
 		destAddr = util.DispIp4(request[4:8])
 	case domainAddressType:
 		len := request[4]
-
-		//fmt.Println("len: ", len)
-
-		//fmt.Println("request: ", request[5:5+len])
 		destAddr = util.DispDomain(request[5:5+len])
 	case ip6AddressType:
 		destAddr = util.DispIp6(request[4:20])
@@ -203,7 +202,6 @@ func getAddressAndPort(request []byte, read_len int) (destAddr, destPort string,
 	}
 
 	destPort = util.DispPort(request[read_len-2:])
-	fmt.Println("daddr: ", destAddr, ":", destPort)
 
 	return destAddr, destPort, err
 }

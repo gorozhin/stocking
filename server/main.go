@@ -7,6 +7,7 @@ import(
 	"../util"
 	"../connection"
 	"../authInterface"
+	"../middlewareInterface"
 )
 
 type StockingServer struct{
@@ -14,6 +15,7 @@ type StockingServer struct{
 	Port uint16
 	Listener *net.TCPListener
 	Auth authInterface.AuthInterface
+	Middleware []middlewareInterface.MiddlewareInterface
 }
 
 func (s *StockingServer)GetAddr() []byte {
@@ -28,7 +30,12 @@ func (s *StockingServer) GetAuth() authInterface.AuthInterface{
 	return s.Auth
 }
 
+func (s *StockingServer) GetMiddleware() []middlewareInterface.MiddlewareInterface {
+	return s.Middleware
+}
+
 func (s *StockingServer)Run(){
+	middlewareInterface.ServerStarted(s.Middleware)
 	service := util.DispIp4(s.Host)+":"+strconv.FormatInt(int64(s.Port), 10)
 	
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", service)
